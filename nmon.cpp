@@ -56,6 +56,7 @@ int readByte(char *b)
   }
 }
 
+// Should modify this to echo data the other way too.
 int main( int argc, char **argv )
 {
   if (argc != 2) {
