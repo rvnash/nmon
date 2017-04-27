@@ -3,37 +3,38 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <errno.h>
+#include <curses.h>
 
-int fd;
-char *serialPath;
+int fdSerial=0;
 
 void closePort()
 {
-  if (fd == 0) return; // If we close an already closed port, that's OK.
-  close(fd);
-  fd = 0;
+  if (fdSerial == 0) return; // If we close an already closed port, that's OK.
+  close(fdSerial);
+  fdSerial = 0;
 }
 
 void openPort(char *path)
 {
-  if (fd != 0) closePort();
+  if (fdSerial != 0) closePort();
 
-  fd = open(path, O_RDWR | O_NOCTTY | O_NDELAY);
-  if (fd == -1) {
+  fdSerial = open(path, O_RDWR | O_NOCTTY | O_NDELAY);
+  if (fdSerial == -1) {
     // Could not open the port.
     return;
   }
 
   // Allow others access to the serial port
-  flock(fd, LOCK_UN );
+  flock(fdSerial, LOCK_UN );
 
   // Set no flow control
-  fcntl(fd, F_SETFL, 0);
+  fcntl(fdSerial, F_SETFL, 0);
+
 }
 
 bool isOpen()
 {
-  return (fd > 0);
+  return (fdSerial > 0);
 }
 
 int readByte(char *b)
@@ -42,14 +43,14 @@ int readByte(char *b)
   int rv;
 
   FD_ZERO(&set); /* clear the set */
-  FD_SET(fd, &set); /* add our file descriptor to the set */
-  rv = select(fd + 1, &set, NULL, NULL, NULL);
+  FD_SET(fdSerial, &set); /* add our file descriptor to the set */
+  rv = select(fdSerial + 1, &set, NULL, NULL, NULL);
   if(rv == -1) {
     return -1; // Runtime error
   } else if(rv == 0) {
     return 0; /* a timeout occured */
   } else {
-    int bytesRead = read( fd, b, 1 ); /* there was data to read */
+    int bytesRead = read( fdSerial, b, 1 ); /* there was data to read */
     if (bytesRead != 1) {
       return -2; // Error reading a byte supposedly ready
     } else return 1; // One byte found
@@ -63,29 +64,41 @@ int main( int argc, char **argv )
     printf("Usage: %s serialDevice\n", argv[0]);
     exit(1);
   }
-  serialPath = argv[1];
-  fd = 0;
-  openPort(serialPath);
+
+  // Initialize curses
+  initscr();
+  timeout(0);
+  noecho();
+
+  openPort(argv[1]);
   if (!isOpen()) {
-    printf("Could not open %s, waiting ...\n", serialPath);
+    printf("Could not open %s, waiting ...\n", argv[1]);
   }
+
   while (1) {
-    if (!isOpen()) {
-      openPort(serialPath);
-      if (!isOpen()) {
-	usleep(250 * 1000); // Sleep for 0.25 second and try again
-      } else {
-	printf("...Reconnected to %s ...\n", serialPath);
+    if (isOpen()) {
+      char b;
+
+      // Read by from port and put it on the screen
+      int read = readByte(&b);
+      if (read == 1) {
+       addch(b);
+      } else if (read < 0) { // Error detected close the port
+        printf("...connection lost to %s ...\n", argv[1]);
+        closePort();
+      }
+
+      // Read port from the keyboard and send it to the port
+      b = getch();
+      if (b > 0) {
+        write( fdSerial, &b, 1);
       }
     } else {
-      char b;
-      int read = readByte(&b);
-      if (read < 0) {
-	printf("...connection lost to %s ...\n", serialPath);
-	closePort();
-      } else if (read == 1) {
-	printf("%c",b);
+      openPort(argv[1]);
+      if (!isOpen()) {
+        usleep(1000); // Sleep for 0.001 second and try again
       } else {
+        printf("...Reconnected to %s ...\n", argv[1]);
       }
     }
   }
