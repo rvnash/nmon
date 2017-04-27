@@ -67,12 +67,14 @@ int main( int argc, char **argv )
 
   // Initialize curses
   initscr();
+  refresh();
   timeout(0);
   noecho();
 
   openPort(argv[1]);
   if (!isOpen()) {
-    printf("Could not open %s, waiting ...\n", argv[1]);
+    printw("Could not open %s, waiting ...\n\r", argv[1]);
+    refresh();
   }
 
   while (1) {
@@ -84,7 +86,8 @@ int main( int argc, char **argv )
       if (read == 1) {
        addch(b);
       } else if (read < 0) { // Error detected close the port
-        printf("...connection lost to %s ...\n", argv[1]);
+        printw("...connection lost to %s ...\n\r", argv[1]);
+        refresh();
         closePort();
       }
 
@@ -98,7 +101,8 @@ int main( int argc, char **argv )
       if (!isOpen()) {
         usleep(1000); // Sleep for 0.001 second and try again
       } else {
-        printf("...Reconnected to %s ...\n", argv[1]);
+        printw("...Reconnected to %s ...\n\r", argv[1]);
+        refresh();
       }
     }
   }
