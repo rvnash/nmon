@@ -1,6 +1,6 @@
 # nmon - Monitor for Arduino like development boards.
 
-I always wanted a 2-way program that could monitor a Arduino like device on my USB ports that would not go away when the device is reprogrammed ore reset. I tried many different programs, like Putty and screen(1), but none of them quite got the balance of features right. One of the most important things is that the program shouldn't exit just because the device temporarily disappears. It should just go into a loop polling for it to come back.
+I always wanted a 2-way program that could monitor a Arduino like device on my USB ports that would not go away when the device is reprogrammed or reset. I tried many different programs, like Putty and screen(1), but none of them quite got the balance of features right. One of the most important things is that the program shouldn't exit just because the device temporarily disappears. It should just go into a loop polling for it to come back.
 
 ## Function:
 * Echo characters from a device to stdout.
