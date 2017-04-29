@@ -8,9 +8,11 @@ I always wanted a 2-way program that could monitor a Arduino like device on my U
 * Don't quit if the device temporarily goes away.
 * Support both devices and network connections.
 
-Usage: nmon /dev/tty.usbmodemXXX
+**Usage:** nmon device
+
 or
-Usage: nmon 192.168.0.25 23
+
+**Usage:** nmon IPAddress [port]
 
 ## Motivation:
 
