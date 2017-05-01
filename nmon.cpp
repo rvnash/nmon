@@ -30,11 +30,14 @@ int openTCPPort(char *ipAddress, int port)
   struct hostent *server;
 
   sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (sockfd < 0) 
-      printf("ERROR opening socket\n");
+  if (sockfd < 0) {
+      printf("ERROR opening socket\n"); // Should never happen
+      exit(0);
+  }
   server = gethostbyname(ipAddress);
   if (server == NULL) {
-      fprintf(stderr,"ERROR, no such host\n");
+      fprintf(stderr,"ERROR, no such host\n"); // Can't resolve address, won't clear up so exit
+      close(sockfd);
       exit(0);
   }
   bzero((char *) &serv_addr, sizeof(serv_addr));
@@ -44,13 +47,13 @@ int openTCPPort(char *ipAddress, int port)
        server->h_length);
   serv_addr.sin_port = htons(port);
   if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0) {
-    printf("ERROR connecting\n");
-    exit(0);
+    close(sockfd);
+    return 0;
   }
   int optval = 1;
   if(setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval)) < 0) {
-    printf("setsockopt()\r\n");
-    exit(0);
+    close(sockfd);
+    return 0;
   }
   return sockfd;
 }
@@ -156,8 +159,6 @@ int main( int argc, char **argv )
     if (argc != 2) usage(argv[0]);
     openName = argv[1];
   }
-  // Put terminal into raw mode
-  setTerminalMode(0);
   if (tcpMode) {
     fdSerial = openTCPPort(openName, port);
   } else {
@@ -168,7 +169,8 @@ int main( int argc, char **argv )
   } else {
     printf("Connected to %s\r\n", openName);
   }
-
+  // Put terminal into raw mode
+  setTerminalMode(0);
   char localb, remoteb;
   int localNumRead, remoteNumRead;
   while (1) {
