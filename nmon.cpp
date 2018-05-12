@@ -91,7 +91,7 @@ int openPort(char *path)
       while ((dir = readdir(d)) != NULL) {
         if (startsWith("tty.usb",dir->d_name)) {
           char fullPath[2000];
-          printf("%s\n", fullPath);
+          sprintf(fullPath, "/dev/%s", dir->d_name);
           int fd = openFilePort(fullPath);
           if (isOpen(fd)) {
             closedir(d);
