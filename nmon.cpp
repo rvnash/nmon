@@ -6,11 +6,13 @@
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <errno.h>
+#include <dirent.h>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <netdb.h> 
+#include <netdb.h>
 
+char connectedTo[2048];
 
 bool isOpen(int fd)
 {
@@ -42,7 +44,7 @@ int openTCPPort(char *ipAddress, int port)
   }
   bzero((char *) &serv_addr, sizeof(serv_addr));
   serv_addr.sin_family = AF_INET;
-  bcopy((char *)server->h_addr, 
+  bcopy((char *)server->h_addr,
        (char *)&serv_addr.sin_addr.s_addr,
        server->h_length);
   serv_addr.sin_port = htons(port);
@@ -58,17 +60,51 @@ int openTCPPort(char *ipAddress, int port)
   return sockfd;
 }
 
+int openFilePort(char *path)
+{
+  int fd;
+  fd = open(path, O_RDWR | O_NOCTTY | O_NDELAY);
+  if (!isOpen(fd)) return 0; // Could not open the port
+  flock(fd, LOCK_UN ); // Allow others access to the serial port
+  struct termios tty;
+  tcgetattr ( fd, &tty );
+  tty.c_cflag |= CLOCAL;     // Ignore ctrl lines
+  tcsetattr ( fd, TCSANOW, &tty );
+  strcpy(connectedTo,path);
+  return fd;
+}
+
+bool startsWith(const char *pre, const char *str)
+{
+    size_t lenpre = strlen(pre),
+           lenstr = strlen(str);
+    return lenstr < lenpre ? false : strncmp(pre, str, lenpre) == 0;
+}
+
 int openPort(char *path)
 {
-    int fd;
-    fd = open(path, O_RDWR | O_NOCTTY | O_NDELAY);
-    if (!isOpen(fd)) return 0; // Could not open the port
-    flock(fd, LOCK_UN ); // Allow others access to the serial port
-    struct termios tty;
-    tcgetattr ( fd, &tty );
-    tty.c_cflag |= CLOCAL;     // Ignore ctrl lines
-    tcsetattr ( fd, TCSANOW, &tty );
-    return fd;
+  if (strcmp(path,"usb")==0) {
+    DIR *d;
+    struct dirent *dir;
+    d = opendir("/dev");
+    if (d) {
+      while ((dir = readdir(d)) != NULL) {
+        if (startsWith("tty.usb",dir->d_name)) {
+          char fullPath[2000];
+          printf("%s\n", fullPath);
+          int fd = openFilePort(fullPath);
+          if (isOpen(fd)) {
+            closedir(d);
+            return fd;
+          }
+        }
+      }
+      closedir(d);
+    }
+    return 0;
+  } else {
+    return openFilePort(path);
+  }
 }
 
 void setTerminalMode(int fd)
@@ -130,7 +166,7 @@ int writeByte(int fd, char *b)
 
 void usage(char*progname)
 {
-    printf("Usage:\n\t%s serialDevice\nor\n\t%s -i ipaddress [port]\n", progname, progname);
+    printf("Usage:\n\t%s serialDevice\nor\n\t%s -i ipaddress [port]\nor\n\t%s usb\n", progname, progname, progname);
     exit(1);
 }
 
@@ -167,7 +203,7 @@ int main( int argc, char **argv )
   if (!isOpen(fdSerial)) {
     printf("Could not open %s, waiting ...\r\n", openName);
   } else {
-    printf("Connected to %s\r\n", openName);
+    printf("Connected to %s\r\n", connectedTo);
   }
   // Put terminal into raw mode
   setTerminalMode(0);
@@ -199,7 +235,9 @@ int main( int argc, char **argv )
         fdSerial = openPort(openName);
       }
       if (isOpen(fdSerial)) {
-        printf("...Reconnected to %s ...\r\n", openName);
+        printf("...Reconnected to %s ...\r\n", connectedTo);
+      } else {
+        usleep(10000);
       }
     }
   }
