@@ -115,27 +115,34 @@ void setTerminalMode(int fd)
     tcsetattr(fd, TCSANOW, &newTermios);
 }
 
-// Returns 1 if a byte was read
+// Returns N>0 if bytes were read
 // Returns 0 if no byte was available
 // Returns negative number on error
-int readByte(int fd, char *b)
+int readBytes(int fdRemote, int fdLocal, char *b, int max, int &whichFD)
 {
   int status;
   fd_set set;
 
   FD_ZERO(&set); /* clear the set */
-  FD_SET(fd, &set); /* add our file descriptor to the set */
-  struct timeval tv = { 0L, 100L }; // Timeout after .1 ms
-  status = select(fd + 1, &set, NULL, NULL, &tv);
+  FD_SET(fdRemote, &set); /* add our file descriptor to the set */
+  FD_SET(fdLocal, &set); /* add our file descriptor to the set */
+  struct timeval tv = { 10L, 0L }; // Timeout after 10seconds
+  int maxFD = (fdRemote > fdLocal) ? fdRemote : fdLocal;
+  status = select(maxFD + 1, &set, NULL, NULL, &tv);
   if (status == 0) return 0; // Timeout
   if(status < 0) {
     return -1; // Runtime error
   } else {
-    int bytesRead = read( fd, b, 1 ); /* there was data to read */
-    if (bytesRead != 1) {
+    if (FD_ISSET(fdRemote, &set)) {
+      whichFD = fdRemote;
+    } else {
+      whichFD = fdLocal;
+    }
+    int bytesRead = read( whichFD, b, max ); /* there was data to read */
+    if (bytesRead <= 0) {
       return -2; // Error reading a byte supposedly ready
     } else {
-      return 1; // One byte found
+      return bytesRead; // One bytes found
     }
   }
 }
@@ -207,28 +214,25 @@ int main( int argc, char **argv )
   }
   // Put terminal into raw mode
   setTerminalMode(0);
-  char localb, remoteb;
-  int localNumRead, remoteNumRead;
   while (1) {
-    localNumRead = readByte(0, &localb);
     if (isOpen(fdSerial)) {
-      if (localNumRead == 1) {
-        writeByte(fdSerial,&localb);
-      }
-      remoteNumRead = readByte(fdSerial, &remoteb);
-      if (remoteNumRead == 1) {
-        write(0,&remoteb,1);
-        fsync(0);
-      } else if (remoteNumRead < 0) { // Error detected close the port
+      char b[1000];
+      int numRead, whichFD;
+      numRead = readBytes(fdSerial, 0, b, sizeof(b), whichFD);
+      if (numRead > 0) {
+        if (whichFD == 0) {
+          // Read from the keyboard, write to the serial port
+          write(fdSerial,b,numRead);
+        } else {
+          // Read from the serial port write to the monitor
+          write(0,b,numRead);
+        }
+      } else if (numRead < 0) { // Error detected close the port
         printf("...connection lost to %s ...\r\n", openName);
         closePort(fdSerial);
         fdSerial = 0;
       }
     } else {
-      if (localNumRead == 1) {
-        write(0,&localb,1); // Echo locally if not connected
-        fsync(0);
-      }
       if (tcpMode) {
         fdSerial = openTCPPort(openName, port);
       } else {
