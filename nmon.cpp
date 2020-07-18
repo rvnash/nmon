@@ -70,6 +70,7 @@ int openFilePort(char *path)
   struct termios tty;
   tcgetattr ( fd, &tty );
   tty.c_cflag |= CLOCAL;     // Ignore ctrl lines
+  tty.c_lflag &= ~ECHO;      // Turn off echo
   tcsetattr ( fd, TCSANOW, &tty );
   strcpy(connectedTo,path);
   return fd;
@@ -90,7 +91,7 @@ int openPort(char *path)
     d = opendir("/dev");
     if (d) {
       while ((dir = readdir(d)) != NULL) {
-        if (startsWith("tty.usb",dir->d_name)) {
+        if (startsWith("tty.usb",dir->d_name) || startsWith("ttyACM",dir->d_name)) {
           char fullPath[2000];
           sprintf(fullPath, "/dev/%s", dir->d_name);
           int fd = openFilePort(fullPath);
@@ -223,6 +224,7 @@ int main( int argc, char **argv )
       if (numRead > 0) {
         if (whichFD == 0) {
           // Read from the keyboard, write to the serial port
+	  printf("WRITING TO SERIAL %c\n",*b);
           write(fdSerial,b,numRead);
         } else {
           // Read from the serial port write to the monitor
