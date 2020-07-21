@@ -66,13 +66,21 @@ int openFilePort(char *path)
   int fd;
   fd = open(path, O_RDWR | O_NOCTTY | O_NDELAY);
   if (!isOpen(fd)) return 0; // Could not open the port
-  flock(fd, LOCK_UN ); // Allow others access to the serial port
   struct termios tty;
-  tcgetattr ( fd, &tty );
-  tty.c_cflag |= CLOCAL;     // Ignore ctrl lines
-  tty.c_lflag &= ~ECHO;      // Turn off echo
-  tcsetattr ( fd, TCSANOW, &tty );
+  int result = tcgetattr ( fd, &tty );
+  if (result < 0) {
+    printf("Error in tcgetattr\n");
+    return 0;
+  }
+  cfmakeraw(&tty);
+  result = tcsetattr ( fd, TCSANOW, &tty );
+  if (result < 0) {
+    printf("Error in tcsetattr\n");
+    return 0;
+  }
+  flock(fd, LOCK_UN ); // Allow others access to the serial port
   strcpy(connectedTo,path);
+  printf("Opened %s\n",path);
   return fd;
 }
 
@@ -111,10 +119,10 @@ int openPort(char *path)
 
 void setTerminalMode(int fd)
 {
-    struct termios newTermios;
-    tcgetattr(fd, &newTermios);
-    newTermios.c_lflag &= ~(ECHO |  ECHONL | ICANON | IEXTEN);
-    tcsetattr(fd, TCSANOW, &newTermios);
+  struct termios newTermios;
+  tcgetattr(fd, &newTermios);
+  newTermios.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN);
+  tcsetattr(fd, TCSANOW, &newTermios);
 }
 
 // Returns N>0 if bytes were read
@@ -204,6 +212,8 @@ int main( int argc, char **argv )
     if (argc != 2) usage(argv[0]);
     openName = argv[1];
   }
+  setTerminalMode(0);
+  fsync(0);
   if (tcpMode) {
     fdSerial = openTCPPort(openName, port);
   } else {
@@ -215,7 +225,6 @@ int main( int argc, char **argv )
     printf("Connected to %s\r\n", connectedTo);
   }
   // Put terminal into raw mode
-  setTerminalMode(0);
   while (1) {
     if (isOpen(fdSerial)) {
       char b[1000];
@@ -224,7 +233,6 @@ int main( int argc, char **argv )
       if (numRead > 0) {
         if (whichFD == 0) {
           // Read from the keyboard, write to the serial port
-	  printf("WRITING TO SERIAL %c\n",*b);
           write(fdSerial,b,numRead);
         } else {
           // Read from the serial port write to the monitor
