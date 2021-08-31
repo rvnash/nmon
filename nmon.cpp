@@ -224,7 +224,7 @@ int main( int argc, char **argv )
       if (numRead > 0) {
         if (whichFD == 0) {
           // Read from the keyboard, write to the serial port
-	  printf("WRITING TO SERIAL %c\n",*b);
+	  // printf("WRITING TO SERIAL %c\n",*b);
           write(fdSerial,b,numRead);
         } else {
           // Read from the serial port write to the monitor
